@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Redactor</title>
+<style>
+:root{--bg:#f2f5f8;--ink:#10151b;--soft:#586573;--line:#c5ced8;--hit:#ffd1da;--hitline:#e23a5c;--ok:#14705a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:1.1rem/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:66rem;margin:0 auto;padding:2rem 1.2rem 4rem}
+h1{font-size:2.7rem;line-height:1.05;margin:0;font-weight:800;letter-spacing:-.02em}
+h1 span{background:var(--ink);color:var(--ink);border-radius:4px;padding:0 .15em;user-select:none}
+.sub{color:var(--soft);margin:.5rem 0 1.5rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+@media(max-width:780px){.grid{grid-template-columns:1fr}}
+label,.lab{display:block;font-size:.95rem;color:var(--soft);margin:0 0 .3rem}
+textarea,select,input[type=text]{width:100%;font:inherit;padding:.75rem;border:2px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+textarea{height:16rem;resize:vertical}
+.box{min-height:16rem;max-height:30rem;overflow:auto;padding:.75rem;border:2px solid var(--line);border-radius:10px;background:#fff;white-space:pre-wrap;word-break:break-word}
+#safe{border-color:var(--ok)}
+mark{background:var(--hit);border-bottom:3px solid var(--hitline);color:inherit;padding:0 .1em}
+button{font:inherit;font-size:1rem;cursor:pointer;border-radius:10px;padding:.65rem 1.1rem;border:2px solid var(--ink);background:#fff;color:var(--ink)}
+button.go{background:var(--ink);color:#fff;font-weight:700}
+button:disabled{opacity:.6;cursor:wait}
+button:focus-visible,textarea:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--hitline);outline-offset:2px}
+.row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.8rem 0}
+.row>*{flex:0 0 auto}.row .grow{flex:1;min-width:10rem}
+#msg{min-height:1.5em;color:#a33b3b}
+.items{list-style:none;padding:0;margin:.5rem 0;display:flex;flex-wrap:wrap;gap:.5rem}
+.items label{display:flex;gap:.45rem;align-items:center;margin:0;padding:.35rem .7rem;border:2px solid var(--line);border-radius:99px;background:#fff;color:var(--ink);font-size:.95rem;cursor:pointer}
+.items small{color:var(--soft)}
+h2{font-size:1.1rem;margin:1.4rem 0 .2rem}
+#msg,#imsg{min-height:1.5em;color:#a33b3b}
+canvas{width:100%;height:auto;border:2px solid var(--line);border-radius:10px;background:#fff;touch-action:none;cursor:crosshair}
+#cs{cursor:default;border-color:var(--ok)}
+select.auto{width:auto}
+</style>
+</head>
+<body>
+<main>
+  <h1>Black out the <span>personal bits</span></h1>
+  <p class="sub">Find phone numbers, Aadhaar-like IDs, addresses and names, then redact them before you share. Everything runs on your laptop.</p>
+
+  <div class="row"><button id="tt" class="go" onclick="tab('text')">Text</button><button id="ti" onclick="tab('image')">Image</button></div>
+  <div id="textmode">
+  <div class="grid">
+    <div>
+      <label for="text">Your document text</label>
+      <textarea id="text" placeholder="Paste text, or load a .txt, .md, .csv or .log file"></textarea>
+      <div class="row">
+        <input id="file" type="file" accept=".txt,.md,.csv,.log,.json" hidden>
+        <button onclick="$('file').click()">Load file</button>
+        <button onclick="sample()">Try a sample</button>
+        <label class="grow" style="margin:0"><input id="ai" type="checkbox" checked> Also find names and addresses with the local AI</label>
+      </div>
+      <div class="row"><button id="go" class="go" onclick="find()">Find personal details</button></div>
+      <div id="msg" role="alert"></div>
+    </div>
+    <div>
+      <div class="lab">Found in your text</div>
+      <div id="found" class="box" aria-live="polite">Details appear here, highlighted.</div>
+    </div>
+  </div>
+
+  <h2 id="ih" hidden>Review what gets redacted</h2>
+  <ul id="items" class="items"></ul>
+  <div class="row" id="adder" hidden>
+    <input id="extra" class="grow" type="text" placeholder="Add something we missed (type it exactly as written)">
+    <button onclick="addExtra()">Add</button>
+  </div>
+
+  <div id="outwrap" hidden>
+    <div class="row">
+      <div><label for="mode" class="lab">Redaction style</label>
+        <select id="mode" onchange="render()"><option value="label">Label, like [PHONE]</option><option value="block">Black blocks</option><option value="partial">Keep last 4 characters</option></select></div>
+    </div>
+    <div class="lab">Safe version</div>
+    <div id="safe" class="box"></div>
+    <div class="row"><button class="go" onclick="copyOut()" id="copy">Copy safe version</button><button onclick="download()">Download .txt</button></div>
+  </div>
+  </div>
+
+  <div id="imgmode" hidden>
+    <div class="row">
+      <input id="imgfile" type="file" accept="image/*" hidden>
+      <button onclick="$('imgfile').click()">Choose image</button>
+      <label class="grow" style="margin:0"><input id="iai" type="checkbox" checked> Also find names and addresses with the local AI</label>
+      <button id="igo" class="go" onclick="imgFind()" disabled>Find personal details</button>
+    </div>
+    <div id="imsg" role="alert"></div>
+    <div class="grid">
+      <div><div class="lab">Your image (drag on it to cover anything by hand)</div><canvas id="cv"></canvas></div>
+      <div><div class="lab">Safe image</div><canvas id="cs"></canvas></div>
+    </div>
+    <h2>Review what gets covered</h2>
+    <ul id="iitems" class="items"></ul>
+    <div class="row">
+      <div><label for="fill" class="lab">Cover with</label><select id="fill" class="auto" onchange="imgDraw()"><option value="#000000">Black</option><option value="#ffffff">White</option></select></div>
+      <button onclick="manual=[];imgDraw()">Clear hand-drawn boxes</button>
+      <button class="go" id="idl" onclick="imgDownload()" disabled>Download safe image</button>
+    </div>
+  </div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let ents=[], src="";
+const SAMPLE="Dear HR team,\nI am Ravi Kumar Sharma (ravi.sharma@gmail.com). Please update my records.\nMobile: +91 98765 43210\nAadhaar: 2345 6789 0123, PAN: ABCDE1234F\nAddress: 14 Lajpat Nagar II, New Delhi 110024\nSalary account: HDFC0001234, UPI: ravi.s@okhdfcbank\nRegards,\nRavi";
+
+$("file").onchange=e=>{const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{$("text").value=r.result}; r.readAsText(f)};
+function tab(m){
+  $("textmode").hidden=m!=="text"; $("imgmode").hidden=m!=="image";
+  $("tt").classList.toggle("go",m==="text"); $("ti").classList.toggle("go",m==="image");
+}
+function sample(){$("text").value=SAMPLE}
+
+async function find(){
+  $("msg").textContent=""; src=$("text").value;
+  $("go").disabled=true; $("go").textContent=$("ai").checked?"Scanning with local AI…":"Scanning…";
+  try{
+    const r=await fetch("/api/detect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text:src,use_ai:$("ai").checked})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail||"Something went wrong.");
+    ents=d.entities.map(e=>({...e,on:e.type!=="org"}));
+    $("msg").textContent=d.message||(ents.length?"":"Nothing found. Add anything we missed below.");
+    $("ih").hidden=false; $("adder").hidden=false; $("outwrap").hidden=false; list(); render();
+  }catch(e){$("msg").textContent=e.message}
+  $("go").disabled=false; $("go").textContent="Find personal details";
+}
+
+function list(){
+  const ul=$("items"); ul.replaceChildren();
+  ents.forEach(e=>{
+    const li=document.createElement("li"), l=document.createElement("label"), c=document.createElement("input");
+    c.type="checkbox"; c.checked=e.on; c.onchange=()=>{e.on=c.checked; render()};
+    const t=document.createElement("span"); t.textContent=e.text.length>40?e.text.slice(0,40)+"…":e.text;
+    const k=document.createElement("small"); k.textContent=e.type;
+    l.append(c,t,k); li.append(l); ul.append(li);
+  });
+}
+
+function addExtra(){
+  const t=$("extra").value.trim(); if(!t||!src.includes(t)){$("msg").textContent="That exact text is not in the document."; return}
+  $("msg").textContent=""; if(!ents.some(e=>e.text===t)) ents.push({text:t,type:"custom",source:"user",on:true});
+  $("extra").value=""; list(); render();
+}
+
+function parts(){ // split the source into plain and flagged pieces, longest match first
+  const on=ents.filter(e=>e.on&&e.text); if(!on.length) return [{t:src}];
+  const map=new Map(on.map(e=>[e.text,e]));
+  const re=new RegExp([...map.keys()].sort((a,b)=>b.length-a.length).map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|"),"g");
+  const out=[]; let last=0,m;
+  while((m=re.exec(src))){ if(m.index>last) out.push({t:src.slice(last,m.index)}); out.push({t:m[0],e:map.get(m[0])}); last=m.index+m[0].length; }
+  if(last<src.length) out.push({t:src.slice(last)});
+  return out;
+}
+
+function mask(p){
+  const m=$("mode").value, n=p.t.length;
+  if(m==="label") return "["+p.e.type.toUpperCase()+"]";
+  if(m==="block") return "████████";
+  return n>=8?"•".repeat(n-4)+p.t.slice(-4):"•".repeat(n);
+}
+
+function render(){
+  const ps=parts(), f=$("found"); f.replaceChildren();
+  ps.forEach(p=>{if(p.e){const k=document.createElement("mark"); k.textContent=p.t; k.title=p.e.type; f.append(k)} else f.append(document.createTextNode(p.t))});
+  $("safe").textContent=ps.map(p=>p.e?mask(p):p.t).join("");
+}
+
+function copyOut(){navigator.clipboard.writeText($("safe").textContent); $("copy").textContent="Copied"; setTimeout(()=>$("copy").textContent="Copy safe version",1500)}
+function download(){const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([$("safe").textContent],{type:"text/plain"})); a.download="redacted.txt"; a.click()}
+
+// ---------- Image mode ----------
+const MAX_SIDE=3000; let work=null, iEnts=[], manual=[], drag=null;
+$("imgfile").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const url=URL.createObjectURL(f), im=new Image();
+  im.onload=()=>{
+    const k=Math.min(1,MAX_SIDE/Math.max(im.naturalWidth,im.naturalHeight));
+    work=document.createElement("canvas"); work.width=Math.round(im.naturalWidth*k); work.height=Math.round(im.naturalHeight*k);
+    work.getContext("2d").drawImage(im,0,0,work.width,work.height); URL.revokeObjectURL(url);
+    iEnts=[]; manual=[]; $("imsg").textContent=""; $("iitems").replaceChildren();
+    $("igo").disabled=false; $("idl").disabled=false; imgDraw();
+  };
+  im.onerror=()=>{$("imsg").textContent="The browser could not open that file as an image."};
+  im.src=url;
+};
+
+async function imgFind(){
+  $("imsg").textContent=""; $("igo").disabled=true; $("igo").textContent="Reading the image…";
+  try{
+    const r=await fetch("/api/detect-image",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({image:work.toDataURL("image/jpeg",0.92),use_ai:$("iai").checked})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail||"Something went wrong.");
+    iEnts=d.entities.map(e=>({...e,on:e.type!=="org"}));
+    $("imsg").textContent=d.message||(iEnts.length?"":"Nothing found. Drag on the image to cover things by hand.");
+    ilist(); imgDraw();
+  }catch(e){$("imsg").textContent=e.message}
+  $("igo").disabled=false; $("igo").textContent="Find personal details";
+}
+
+function ilist(){
+  const ul=$("iitems"); ul.replaceChildren();
+  iEnts.forEach(e=>{
+    const li=document.createElement("li"), l=document.createElement("label"), c=document.createElement("input");
+    c.type="checkbox"; c.checked=e.on; c.onchange=()=>{e.on=c.checked; imgDraw()};
+    const t=document.createElement("span"); t.textContent=e.text.length>40?e.text.slice(0,40)+"…":e.text;
+    const k=document.createElement("small"); k.textContent=e.type;
+    l.append(c,t,k); li.append(l); ul.append(li);
+  });
+}
+
+function imgDraw(){
+  if(!work) return;
+  const boxes=[...iEnts.filter(e=>e.on).flatMap(e=>e.boxes),...manual];
+  for(const [c,safe] of [[$("cv"),false],[$("cs"),true]]){
+    c.width=work.width; c.height=work.height; const x=c.getContext("2d"); x.drawImage(work,0,0);
+    boxes.forEach(([a,b,w,h])=>{
+      if(safe){x.fillStyle=$("fill").value; x.fillRect(a,b,w,h)}
+      else{x.fillStyle="rgba(226,58,92,.28)"; x.fillRect(a,b,w,h); x.strokeStyle="#e23a5c"; x.lineWidth=Math.max(2,work.width/500); x.strokeRect(a,b,w,h)}
+    });
+    if(drag&&!safe){x.strokeStyle="#e23a5c"; x.lineWidth=Math.max(2,work.width/500); x.strokeRect(Math.min(drag[0],drag[2]),Math.min(drag[1],drag[3]),Math.abs(drag[2]-drag[0]),Math.abs(drag[3]-drag[1]))}
+  }
+}
+
+const cv=$("cv");
+const pt=e=>{const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+cv.onpointerdown=e=>{if(!work) return; cv.setPointerCapture(e.pointerId); const p=pt(e); drag=[p[0],p[1],p[0],p[1]]};
+cv.onpointermove=e=>{if(!drag) return; const p=pt(e); drag[2]=p[0]; drag[3]=p[1]; imgDraw()};
+cv.onpointerup=()=>{
+  if(!drag) return; const [a,b,c,d]=drag; drag=null;
+  if(Math.abs(c-a)>6&&Math.abs(d-b)>6) manual.push([Math.min(a,c),Math.min(b,d),Math.abs(c-a),Math.abs(d-b)]);
+  imgDraw();
+};
+
+function imgDownload(){ $("cs").toBlob(b=>{const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="redacted.png"; a.click()},"image/png") }
+</script>
+</body>
+</html>
